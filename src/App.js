@@ -4,7 +4,7 @@ import Button from "./components/button";
 const Card = ({ children, className }) => {
   return (
     <div
-      className={`w-80 p-6 bg-white shadow-lg rounded-xl border border-gray-300 text-center transition-transform transform hover:scale-105 ${className}`}
+      className={`w-full max-w-sm p-6 bg-white shadow-lg rounded-xl border border-gray-300 text-center transition-transform transform hover:scale-105 ${className}`}
     >
       {children}
     </div>
@@ -91,7 +91,7 @@ export default function CounterApp() {
 
   return (
     <div className="flex flex-col items-center gap-8 p-8 bg-gray-100 min-h-screen">
-      <div className="flex gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
         <CounterCard
           name="Hari"
           count={hari}
