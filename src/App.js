@@ -14,22 +14,83 @@ const Card = ({ children, className }) => {
 const CardContent = ({ children }) => {
   return <div className="p-4">{children}</div>;
 };
+const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+};
+
+const allowedLocation = {
+  latitude: 28.4068947917427152, // Your fixed latitude
+  longitude: 77.11840259769352, // Your fixed longitude
+  // 28.432187466432854, 77.04127259550278
+  // latitude: 28.432187466432854, // Your fixed latitude
+  // longitude: 77.04127259550278, // Your fixed longitude
+};
 
 const CounterCard = ({
   name,
   count,
   onAdd,
   onSubtract,
+  markToday,
   onReset,
   isFirstDay,
 }) => {
-  const confirmAction = (action) => {
+  const confirmAction = (action, actionType) => {
+    if (actionType === "decrement") {
+      window.confirm(
+        `You can not decement ${name} counter?, reach out to admin`
+      );
+      return;
+    }
     if (
-      window.confirm(`Are you sure you want to update the ${name} counter?`)
+      window.confirm(
+        `Are you sure you want to update the ${name} counter?, this action can not be revertible`
+      )
     ) {
       action();
     }
   };
+  const addPopUp = (action) => {
+    if (action === "away") window.confirm(`You are away from the office`);
+    if (action === "alreadyMarked")
+      window.confirm(`You already marked the it, see you tommorow`);
+  };
+
+  const [isWithinRange, setIsWithinRange] = useState(false);
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLon = position.coords.longitude;
+
+          const distance = getDistanceFromLatLonInKm(
+            userLat,
+            userLon,
+            allowedLocation.latitude,
+            allowedLocation.longitude
+          );
+          setIsWithinRange(distance <= 1);
+        },
+        (error) => {
+          console.error("Error fetching location:", error);
+          setIsWithinRange(false);
+        }
+      );
+    }
+  }, []);
 
   return (
     <Card>
@@ -39,7 +100,8 @@ const CounterCard = ({
         <div className="flex justify-center gap-4">
           <Button
             className="w-10 h-10 bg-black text-white rounded-md shadow hover:bg-gray-800"
-            onClick={() => confirmAction(onSubtract)}
+            onClick={() => confirmAction(onSubtract, "decrement")}
+            // disabled={true}
           >
             -
           </Button>
@@ -54,7 +116,18 @@ const CounterCard = ({
           </Button>
           <Button
             className="w-10 h-10 bg-black text-white rounded-md shadow hover:bg-gray-800"
-            onClick={() => confirmAction(onAdd)}
+            onClick={() => {
+              if (!markToday) {
+                addPopUp("alreadyMarked");
+                return;
+              }
+              if (isWithinRange) {
+                confirmAction(onAdd);
+              } else {
+                addPopUp("away");
+              }
+            }}
+            disabled={!isWithinRange}
           >
             +
           </Button>
@@ -66,7 +139,10 @@ const CounterCard = ({
 
 export default function CounterApp() {
   const [hari, setHari] = useState(0);
+  const [markHariToday, setmarkHariToday] = useState(true);
   const [chiya, setChiya] = useState(0);
+  const [markChiyaToday, setmarkChiyaToday] = useState(true);
+
   const [isFirstDay, setIsFirstDay] = useState(false);
 
   useEffect(() => {
@@ -79,14 +155,75 @@ export default function CounterApp() {
     fetch("https://react-http2024-default-rtdb.firebaseio.com/chiya.json")
       .then((res) => res.json())
       .then((data) => setChiya(data.count));
+
+    fetch("https://react-http2024-default-rtdb.firebaseio.com/location.json")
+      .then((res) => res.json())
+      .then((data1) => {
+        const data = Object.values(data1);
+        const today = new Date();
+        const todayFormatted = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
+        const finalData = data.map((data) => {
+          const dateObj = new Date(data.location.timestamp);
+          const timestampFormatted = dateObj.toISOString().split("T")[0];
+          return {
+            name: data.name,
+            date: timestampFormatted,
+          };
+        });
+        const hariObj = finalData.find(
+          (user) => user.name === "hari" && user.date === todayFormatted
+        );
+        const chiyaobj = finalData.find(
+          (user) => user.name === "chiya" && user.date === todayFormatted
+        );
+        // console.log(hariObj);
+        console.log(chiyaobj);
+        if (hariObj) {
+          setmarkHariToday(false);
+        }
+        if (chiyaobj) {
+          setmarkChiyaToday(false);
+        }
+      });
   }, []);
 
-  const updateCounter = (name, value) => {
+  const updateCounter = (name, value, actionType) => {
     fetch(`https://react-http2024-default-rtdb.firebaseio.com//${name}.json`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ count: value }),
     });
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            timestamp: new Date().toISOString(),
+          };
+
+          fetch(
+            `https://react-http2024-default-rtdb.firebaseio.com/location.json`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: name,
+                actionType: actionType,
+                count: value,
+                location: location,
+              }),
+            }
+          );
+        },
+        (error) => {
+          console.error("Error fetching location:", error);
+        }
+      );
+    } else {
+      console.error("Geolocation not supported");
+    }
   };
 
   return (
@@ -96,6 +233,7 @@ export default function CounterApp() {
           name="Hari"
           count={hari}
           isFirstDay={isFirstDay}
+          markToday={markHariToday}
           onAdd={() => {
             setHari(hari + 1);
             updateCounter("hari", hari + 1);
@@ -113,6 +251,7 @@ export default function CounterApp() {
           name="Chiya"
           count={chiya}
           isFirstDay={isFirstDay}
+          markToday={markChiyaToday}
           onAdd={() => {
             setChiya(chiya + 1);
             updateCounter("chiya", chiya + 1);
