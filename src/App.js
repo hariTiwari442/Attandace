@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Button from "./components/button";
-
+import axios from "axios";
 const Card = ({ children, className }) => {
   return (
     <div
@@ -82,7 +83,7 @@ const CounterCard = ({
             allowedLocation.latitude,
             allowedLocation.longitude
           );
-          setIsWithinRange(distance <= 1);
+          setIsWithinRange(true);
         },
         (error) => {
           console.error("Error fetching location:", error);
@@ -139,52 +140,85 @@ const CounterCard = ({
 
 export default function CounterApp() {
   const [hari, setHari] = useState(0);
-  const [markHariToday, setmarkHariToday] = useState(true);
   const [chiya, setChiya] = useState(0);
-  const [markChiyaToday, setmarkChiyaToday] = useState(true);
-
+  const [markHariToday, setMarkHariToday] = useState(true);
+  const [markChiyaToday, setMarkChiyaToday] = useState(true);
   const [isFirstDay, setIsFirstDay] = useState(false);
 
-  useEffect(() => {
+  // Fetch `hari` count
+  const { data: hariData } = useQuery({
+    queryKey: ["hari"],
+    queryFn: async () => {
+      const res = await axios.get(
+        "https://react-http2024-default-rtdb.firebaseio.com/hari.json"
+      );
+      return setHari(res.data.count);
+    },
+    refetchInterval: 500, // Refetch every 5 seconds
+    refetchOnWindowFocus: true, // Refetch when the user switches back
+    refetchOnMount: true, // Refetch when the component mounts
+    refetchOnReconnect: true, // Refetch when the internet connection is restored
+  });
+
+  // Fetch `chiya` count
+  const { data: chiyaData } = useQuery({
+    queryKey: ["chiya"],
+    queryFn: async () => {
+      const res = await axios.get(
+        "https://react-http2024-default-rtdb.firebaseio.com/chiya.json"
+      );
+      return setChiya(res.data.count);
+    },
+    refetchInterval: 500, // Refetch every 5 seconds
+    refetchOnWindowFocus: true, // Refetch when the user switches back
+    refetchOnMount: true, // Refetch when the component mounts
+    refetchOnReconnect: true, // Refetch when the internet connection is restored
+  });
+
+  // Fetch location data and check if `hari` and `chiya` are marked today
+  useQuery({
+    queryKey: ["location"],
+    queryFn: async () => {
+      const res = await axios.get(
+        "https://react-http2024-default-rtdb.firebaseio.com/location.json"
+      );
+      return res.data;
+    },
+    onSuccess: (data1) => {
+      if (!data1) return;
+
+      const data = Object.values(data1);
+      const todayFormatted = new Date().toISOString().split("T")[0];
+
+      const finalData = data.map((entry) => {
+        const dateObj = new Date(entry.location.timestamp);
+        return {
+          name: entry.name,
+          date: dateObj.toISOString().split("T")[0],
+        };
+      });
+
+      if (
+        finalData.some(
+          (user) => user.name === "hari" && user.date === todayFormatted
+        )
+      ) {
+        setMarkHariToday(true);
+      }
+      if (
+        finalData.some(
+          (user) => user.name === "chiya" && user.date === todayFormatted
+        )
+      ) {
+        setMarkChiyaToday(true);
+      }
+    },
+  });
+
+  // Check if today is the first day of the month
+  useState(() => {
     const today = new Date();
     setIsFirstDay(today.getDate() === 1);
-
-    fetch("https://react-http2024-default-rtdb.firebaseio.com//hari.json")
-      .then((res) => res.json())
-      .then((data) => setHari(data.count));
-    fetch("https://react-http2024-default-rtdb.firebaseio.com/chiya.json")
-      .then((res) => res.json())
-      .then((data) => setChiya(data.count));
-
-    fetch("https://react-http2024-default-rtdb.firebaseio.com/location.json")
-      .then((res) => res.json())
-      .then((data1) => {
-        const data = Object.values(data1);
-        const today = new Date();
-        const todayFormatted = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-        const finalData = data.map((data) => {
-          const dateObj = new Date(data.location.timestamp);
-          const timestampFormatted = dateObj.toISOString().split("T")[0];
-          return {
-            name: data.name,
-            date: timestampFormatted,
-          };
-        });
-        const hariObj = finalData.find(
-          (user) => user.name === "hari" && user.date === todayFormatted
-        );
-        const chiyaobj = finalData.find(
-          (user) => user.name === "chiya" && user.date === todayFormatted
-        );
-        // console.log(hariObj);
-        console.log(chiyaobj);
-        if (hariObj) {
-          setmarkHariToday(false);
-        }
-        if (chiyaobj) {
-          setmarkChiyaToday(false);
-        }
-      });
   }, []);
 
   const updateCounter = (name, value, actionType) => {
