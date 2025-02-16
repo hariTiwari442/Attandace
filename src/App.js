@@ -83,7 +83,7 @@ const CounterCard = ({
             allowedLocation.latitude,
             allowedLocation.longitude
           );
-          setIsWithinRange(true);
+          setIsWithinRange(distance <= 1);
         },
         (error) => {
           console.error("Error fetching location:", error);
@@ -203,14 +203,14 @@ export default function CounterApp() {
           (user) => user.name === "hari" && user.date === todayFormatted
         )
       ) {
-        setMarkHariToday(true);
+        setMarkHariToday(false);
       }
       if (
         finalData.some(
           (user) => user.name === "chiya" && user.date === todayFormatted
         )
       ) {
-        setMarkChiyaToday(true);
+        setMarkChiyaToday(false);
       }
     },
   });
